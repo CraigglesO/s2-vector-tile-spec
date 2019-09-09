@@ -177,17 +177,13 @@ The `geometry` field is described in each feature by the `type` field which must
 
 Geometry collections are not supported.
 
-##### 4.3.4.1. Unknown Geometry Type
-
-The specification purposefully leaves an unknown geometry type as an option. This geometry type encodes experimental geometry types that an encoder MAY choose to implement. Decoders MAY ignore any features of this geometry type.
-
-##### 4.3.4.2. Point Geometry Type
+##### 4.3.4.1. Point Geometry Type
 
 The `POINT` geometry type encodes a point or multipoint geometry. The geometry command sequence for a point geometry MUST consist of a single `MoveTo` command with a command count greater than 0.
 
 If the `MoveTo` command for a `POINT` geometry has a command count of 1, then the geometry MUST be interpreted as a single point; otherwise the geometry MUST be interpreted as a multipoint geometry, wherein each pair of `ParameterInteger`s encodes a single point.
 
-##### 4.3.4.3. Linestring Geometry Type
+##### 4.3.4.2. Linestring Geometry Type
 
 The `LINESTRING` geometry type encodes a linestring or multilinestring geometry. The geometry command sequence for a linestring geometry MUST consist of one or more repetitions of the following sequence:
 
@@ -196,7 +192,7 @@ The `LINESTRING` geometry type encodes a linestring or multilinestring geometry.
 
 If the command sequence for a `LINESTRING` geometry type includes only a single `MoveTo` command then the geometry MUST be interpreted as a single linestring; otherwise the geometry MUST be interpreted as a multilinestring geometry, wherein each `MoveTo` signals the beginning of a new linestring.
 
-##### 4.3.4.4. Polygon Geometry Type
+##### 4.3.4.3. Polygon Geometry Type
 
 The `POLYGON` geometry type encodes a polygon geometry, each polygon consisting of exactly one exterior ring that contains zero or more interior rings. The geometry command sequence for a polygon consists of one or more repetitions of the following sequence:
 
@@ -209,7 +205,7 @@ Each `ExteriorRing` and `InteriorRing` MUST consist of the following sequence:
 2. A `LineTo` command with a command count greater than 1
 3. A `ClosePath` command
 
-##### 4.3.4.4. Polygon Geometry Type
+##### 4.3.4.4. MultiPolygon Geometry Type
 
 The `MULTIPOLYGON` geometry type encodes a multi-polygon geometry, each polygon consisting of exactly one exterior ring that contains zero or more interior rings. The geometry command sequence for a polygon consists of one or more repetitions of the following sequence:
 
@@ -228,7 +224,7 @@ An exterior ring is DEFINED as a linear ring having a positive area as calculate
 
 An interior ring is DEFINED as a linear ring having a negative area as calculated by applying the [surveyor's formula](https://en.wikipedia.org/wiki/Shoelace_formula) to the vertices of the polygon in tile coordinates. In the tile coordinate system (with the Y axis positive down and X axis positive to the right) this makes the interior ring's winding order appear counterclockwise.
 
-If the command sequence for a `POLYGON` geometry type includes only a single exterior ring then the geometry MUST be interpreted as a single polygon; otherwise the geometry MUST be interpreted as a multipolygon geometry, wherein each exterior ring signals the beginning of a new polygon. If a polygon has interior rings they MUST be encoded directly after the exterior ring of the polygon to which they belong.
+If the command sequence for a `POLYGON` geometry type includes only a single exterior ring then the geometry MUST be interpreted as a single polygon; otherwise the geometry MUST be interpreted as a `MULTIPOLYGON` geometry, wherein each exterior ring signals the beginning of a new polygon using the `NextPolygon` command. If a polygon has interior rings they MUST be encoded directly after the exterior ring of the polygon to which they belong.
 
 Linear rings MUST be geometric objects that have no anomalous geometric points, such as self-intersection or self-tangency. The position of the cursor before calling the `ClosePath` command of a linear ring SHALL NOT repeat the same position as the first point in the linear ring as this would create a zero-length line segment. A linear ring SHOULD NOT have an area calculated by the surveyor's formula equal to zero, as this would signify a ring with anomalous geometric points.
 
@@ -390,12 +386,13 @@ This polygon would be encoded with the following set of commands:
 * LineTo(+10,+0)
 * LineTo(+0,+10)
 * LineTo(-10,+0) // Cursor at 0,10 after this command
-* ClosePath // End of Polygon 1
+* ClosePath
+* NextPolygon // End of Polygon 1
 * MoveTo(+11,+1) // NOTE THAT THIS IS RELATIVE TO LAST LINETO!
 * LineTo(+9,+0)
 * LineTo(+0,+9)
 * LineTo(-9,+0) // Cursor at 11,20 after this command
-* ClosePath // This is a new polygon because area is positive!
+* ClosePath // Because the next ring is an interior one, we do not run the "NextPolygon" command
 * MoveTo(+2,-7) // NOTE THAT THIS IS RELATIVE TO LAST LINETO!
 * LineTo(+0,+4)
 * LineTo(+4,+0)
@@ -403,13 +400,14 @@ This polygon would be encoded with the following set of commands:
 * ClosePath // This is an interior ring because area is negative!
 
 ```
-Encoded as: [ 9 0 0 26 20 0 0 20 19 0 15 9 22 2 26 18 0 0 18 17 0 15 9 4 13 26 0 8 8 0 0 7 15 ]
-              |      |                |  |       |                |  |       |              `> [00001 111] (ClosePath)
-              |      |                |  |       |                |  |       `> [00011 010] = (LineTo), command count 3
-              |      |                |  |       |                |  `> [00001 001] = command id 1 (MoveTo), command count 1
-              |      |                |  |       |                `> [00001 111] (ClosePath)
-              |      |                |  |       `> [00011 010] = (LineTo), command count 3
-              |      |                | `> [00001 001] = command id 1 (MoveTo), command count 1
+Encoded as: [ 9 0 0 26 20 0 0 20 19 0 15 12 9 22 2 26 18 0 0 18 17 0 15 9 4 13 26 0 8 8 0 0 7 15 ]
+              |      |                |  |  |       |                |  |       |              `> [00001 111] (ClosePath)
+              |      |                |  |  |       |                |  |       `> [00011 010] = (LineTo), command count 3
+              |      |                |  |  |       |                |  `> [00001 001] = command id 1 (MoveTo), command count 1
+              |      |                |  |  |       |                `> [00001 111] (ClosePath)
+              |      |                |  |  |       `> [00011 010] = (LineTo), command count 3
+              |      |                |  |  `> [00001 001] = command id 1 (MoveTo), command count 1
+              |      |                |  `> [00001 100] (NextPolygon)
               |      |                `> [00001 111] (ClosePath)
               |      `> [00011 010] = (LineTo), command count 3
               `> [00001 001] = command id 1 (MoveTo), command count 1
