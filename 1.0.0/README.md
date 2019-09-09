@@ -1,4 +1,4 @@
-# S2 Vector Tile Specification V.1.0
+# S2 Vector Tile Specification 1.0.0
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
 "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in
@@ -96,19 +96,21 @@ A command ID specifies one of the following commands:
 
 |  Command     |  Id  | Parameters    | Parameter Count |
 | ------------ |:----:| ------------- | --------------- |
-| MoveTo       | `1`  | `dXY`         | 1               |
-| LineTo       | `2`  | `dXY`         | 1               |
+| MoveTo       | `1`  | `dX`, `dY`    | 2               |
+| LineTo       | `2`  | `dX`, `dY`    | 2               |
+| NextPolygon  | `4`  | No parameters | 0               |
 | ClosePath    | `7`  | No parameters | 0               |
 
 ##### Example Command Integers
 
-| Command   |  ID  | Count | CommandInteger | Binary Representation `[Count][Id]`      |
-| --------- |:----:|:-----:|:--------------:|:----------------------------------------:|
-| MoveTo    | `1`  | `1`   | `9`            | `[00000000 00000000 00000000 00001][001]` |
-| MoveTo    | `1`  | `120` | `961`          | `[00000000 00000000 00000011 11000][001]` |
-| LineTo    | `2`  | `1`   | `10`           | `[00000000 00000000 00000000 00001][010]` |
-| LineTo    | `2`  | `3`   | `26`           | `[00000000 00000000 00000000 00011][010]` |
-| ClosePath | `7`  | `1`   | `15`           | `[00000000 00000000 00000000 00001][111]` |
+| Command     |  ID  | Count | CommandInteger | Binary Representation `[Count][Id]`       |
+|:-----------:|:----:|:-----:|:--------------:|:-----------------------------------------:|
+| MoveTo      | `1`  | `1`   | `9`            | `[00000000 00000000 00000000 00001][001]` |
+| MoveTo      | `1`  | `120` | `961`          | `[00000000 00000000 00000011 11000][001]` |
+| LineTo      | `2`  | `1`   | `10`           | `[00000000 00000000 00000000 00001][010]` |
+| LineTo      | `2`  | `3`   | `26`           | `[00000000 00000000 00000000 00011][010]` |
+| ClosePath   | `7`  | `1`   | `15`           | `[00000000 00000000 00000000 00001][111]` |
+| NextPolygon | `4`  | `1`   | `12`           | `[00000000 00000000 00000000 00001][100]` |
 
 
 #### 4.3.2. Parameter Integers
@@ -131,50 +133,47 @@ value = ((ParameterInteger >> 1) ^ (-(ParameterInteger & 1)))
 
 #### 4.3.3. Command Types
 
-For all descriptions of commands the initial position of the cursor shall be described to be at the coordinates `(cXY)` where `cX` is the position of the cursor on the X axis and `cY` is the position of the `cursor` on the Y axis. Note: cXY is a coordinate pair, the data is compressed to a 1d vector. Thus moving forward, `c[y][x] === c[EXTENT * y + x]`. To find our original `(pXY)` pair: `x = INDEX % N` and `y = (INDEX - INDEX % EXTENT) / EXTENT`
+For all descriptions of commands the initial position of the cursor shall be described to be at the coordinates `(cX, cY)` where `cX` is the position of the cursor on the X axis and `cY` is the position of the `cursor` on the Y axis.
 
 ##### 4.3.3.1. MoveTo Command
 
-A `MoveTo` command with a command count of `n` MUST be immediately followed by `n` pairs of `ParameterInteger`s. Each pair `(dXY)`:
+A `MoveTo` command with a command count of `n` MUST be immediately followed by `n` pairs of `ParameterInteger`s. Each pair `(dX, dY)`:
 
-1. Defines the coordinate `(pXY)`, where `pX = cX + dX` and `pY = cY + dY`.
+1. Defines the coordinate `(pX, pY)`, where `pX = cX + dX` and `pY = cY + dY`.
    * Within POINT geometries, this coordinate defines a new point.
    * Within LINESTRING geometries, this coordinate defines the starting vertex of a new line.
    * Within POLYGON geometries, this coordinate defines the starting vertex of a new linear ring.
-2. Moves the cursor to `(pXY)`.
-3. If the geometry is `3D`, the `MoveTo` command MUST be immediately followed by the `Z` coordinate
-  * The `Z` coordinate is stand alone and MUST be a valid `uint32` value
+2. Moves the cursor to `(pX, pY)`.
 
 ##### 4.3.3.2. LineTo Command
 
-A `LineTo` command with a command count of `n` MUST be immediately followed by `n` `ParameterInteger`s. Each an `(dXY)` unit pair:
+A `LineTo` command with a command count of `n` MUST be immediately followed by `n` pairs of `ParameterInteger`s. Each pair `(dX, dY)`:
 
-1. Defines a segment beginning at the cursor `(cXY)` and ending at the coordinate `(pXY)`, where `pX = cX + dX` and `pY = cY + dY`.
+1. Defines a segment beginning at the cursor `(cX, cY)` and ending at the coordinate `(pX, pY)`, where `pX = cX + dX` and `pY = cY + dY`.
    * Within LINESTRING geometries, this segment extends the current line.
    * Within POLYGON geometries, this segment extends the current linear ring.
-2. Moves the cursor to `(pXY)`.
-3. If the geometry is `3D`, the `LineTo` command MUST be immediately followed by the `Z` coordinate
-  * The `Z` coordinate is stand alone and MUST be a valid `uint32` value
+2. Moves the cursor to `(pX, pY)`.
 
-For any pair of `(dXY)` the `dX` and `dY` MUST NOT both be `0`.
+For any pair of `(dX, dY)` the `dX` and `dY` MUST NOT both be `0`.
 
 ##### 4.3.3.3. ClosePath Command
 
-A `ClosePath` command MUST have a command count of 1 and no parameters. The command closes the current linear ring of a POLYGON geometry via a line segment beginning at the cursor `(cXY)` and ending at the starting vertex of the current linear ring.
+A `ClosePath` command MUST have a command count of 1 and no parameters. The command closes the current linear ring of a POLYGON geometry via a line segment beginning at the cursor `(cX, cY)` and ending at the starting vertex of the current linear ring.
 
 This command does not change the cursor position.
+
+##### 4.3.3.3. NextPolygon Command
+
+a `NextPolygon` command MUST have a command count of 1 and no parameters. the command ends the current polygon of a MULTIPOLYGON geometry. The following polygon will have a `MoveTo` command that starts at the last point described by the previous polygon.
 
 #### 4.3.4. Geometry Types
 
 The `geometry` field is described in each feature by the `type` field which must be a value in the enum `GeomType`. The following geometry types are supported:
 
-* UNKNOWN
 * POINT
 * LINESTRING
 * POLYGON
-* 3DPOINT
-* 3DLINESTRING
-* 3DPOLYGON
+* MULTIPOLYGON
 
 Geometry collections are not supported.
 
@@ -182,15 +181,13 @@ Geometry collections are not supported.
 
 The specification purposefully leaves an unknown geometry type as an option. This geometry type encodes experimental geometry types that an encoder MAY choose to implement. Decoders MAY ignore any features of this geometry type.
 
-##### 4.3.4.2.a Point Geometry Type
+##### 4.3.4.2. Point Geometry Type
 
 The `POINT` geometry type encodes a point or multipoint geometry. The geometry command sequence for a point geometry MUST consist of a single `MoveTo` command with a command count greater than 0.
 
 If the `MoveTo` command for a `POINT` geometry has a command count of 1, then the geometry MUST be interpreted as a single point; otherwise the geometry MUST be interpreted as a multipoint geometry, wherein each pair of `ParameterInteger`s encodes a single point.
 
-##### 4.3.4.2.b 3D Point Geometry Type
-
-##### 4.3.4.3.a Linestring Geometry Type
+##### 4.3.4.3. Linestring Geometry Type
 
 The `LINESTRING` geometry type encodes a linestring or multilinestring geometry. The geometry command sequence for a linestring geometry MUST consist of one or more repetitions of the following sequence:
 
@@ -199,11 +196,9 @@ The `LINESTRING` geometry type encodes a linestring or multilinestring geometry.
 
 If the command sequence for a `LINESTRING` geometry type includes only a single `MoveTo` command then the geometry MUST be interpreted as a single linestring; otherwise the geometry MUST be interpreted as a multilinestring geometry, wherein each `MoveTo` signals the beginning of a new linestring.
 
-##### 4.3.4.3.b 3D Linestring Geometry Type
+##### 4.3.4.4. Polygon Geometry Type
 
-##### 4.3.4.4.a Polygon Geometry Type
-
-The `POLYGON` geometry type encodes a polygon or multipolygon geometry, each polygon consisting of exactly one exterior ring that contains zero or more interior rings. The geometry command sequence for a polygon consists of one or more repetitions of the following sequence:
+The `POLYGON` geometry type encodes a polygon geometry, each polygon consisting of exactly one exterior ring that contains zero or more interior rings. The geometry command sequence for a polygon consists of one or more repetitions of the following sequence:
 
 1. An `ExteriorRing`
 2. Zero or more `InteriorRing`s
@@ -214,7 +209,20 @@ Each `ExteriorRing` and `InteriorRing` MUST consist of the following sequence:
 2. A `LineTo` command with a command count greater than 1
 3. A `ClosePath` command
 
-##### 4.3.4.4.b 3D Polygon Geometry Type
+##### 4.3.4.4. Polygon Geometry Type
+
+The `MULTIPOLYGON` geometry type encodes a multi-polygon geometry, each polygon consisting of exactly one exterior ring that contains zero or more interior rings. The geometry command sequence for a polygon consists of one or more repetitions of the following sequence:
+
+1. An `ExteriorRing`
+2. Zero or more `InteriorRing`s
+
+Each `ExteriorRing` and `InteriorRing` MUST consist of the following sequence:
+
+1. A `MoveTo` command with a command count of 1
+2. A `LineTo` command with a command count greater than 1
+3. A `ClosePath` command
+
+Following a full set of `ExteriorRing` and potential `InteriorRing`s, a `NextPolygon` command will be given. This is to properly separate each subsequent polygon.
 
 An exterior ring is DEFINED as a linear ring having a positive area as calculated by applying the [surveyor's formula](https://en.wikipedia.org/wiki/Shoelace_formula) to the vertices of the polygon in tile coordinates. In the tile coordinate system (with the Y axis positive down and X axis positive to the right) this makes the exterior ring's winding order appear clockwise.
 
